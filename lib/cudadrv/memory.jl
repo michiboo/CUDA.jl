@@ -9,8 +9,6 @@ using ..CUDA: @enum_without_prefix, CUstream, CUdevice, CuDim3, CUarray, CUarray
 
 using Base: @deprecate_binding
 
-using IntervalTrees
-
 
 # TODO: needs another redesign
 #
