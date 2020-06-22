@@ -616,40 +616,18 @@ end
 #
 
 ## memory pinning
-
-const pinned_memory = IntervalTree{Int, Interval{Int}}()
-
-function pin(ptr::Ptr, bytesize::Integer, flags=0)
-    low = Int(ptr)
-    high = Int(ptr+bytesize)
-
-    # register gaps between already-registered slices
-    intersections = [Interval{Int}(0, low),
-                     intersect(pinned_memory, Interval{Int}(low, high))...,
-                     Interval{Int}(high, 0)]
-    for (lower, upper) in zip(intersections[1:end-1], intersections[2:end])
-        gap = Interval{Int}(last(lower), first(upper))
-        if first(gap) < last(gap)
-            gap_ptr = Ptr{Nothing}(first(gap))
-            gap_bytesize = last(gap) - first(gap)
-            Mem.register(Mem.Host, gap_ptr, gap_bytesize, flags)
-        end
+const __pinned_memory = Dict{Ptr, WeakRef}()
+function pin(a::Array, flags=0)
+    # use pointer instead of objectid?
+    ptr = pointer(a)
+    if haskey(__pinned_memory, ptr) && __pinned_memory[ptr].value !== nothing
+        return nothing
     end
-
-    # delete actual intersections
-    low = min(low, first(intersections[2]))
-    high = max(high, last(intersections[end-1]))
-    for range in intersections[2:end-1]
-        delete!(pinned_memory, range)
-    end
-
-    push!(pinned_memory, Interval{Int}(low, high))
-    return
+    ad = Mem.register(Mem.Host, pointer(a), sizeof(a), flags)
+    finalizer(_ -> Mem.unregister(ad), a)
+    __pinned_memory[ptr] = WeakRef(a)
+    return nothing
 end
-
-pin(a::Union{Base.Array,SubArray{<:Any,<:Any,<:Base.Array},Base.ReshapedArray{<:Any,<:Any,<:Base.Array}}, flags=0) =
-    pin(pointer(a), sizeof(a), flags)
-
 
 ## memory info
 
